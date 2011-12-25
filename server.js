@@ -4,7 +4,9 @@ var app  = require('http').createServer(handler),
 	net  = require('net'),
 	url  = require('url'),
 	mime = require('mime'),
-	path = require('path');
+	path = require('path'),
+	irc  = require('irc');
+
 io.set('log level', 1);
 app.listen(80);
 
@@ -46,9 +48,17 @@ function serve(res, filename) {
 }
 
 io.sockets.on('connection', function(socket) {
-	socket.emit('message', {hello: "world"});
+	var client = new irc.Client('irc.foonetic.net', 'mintI-fresh', {
+		channels: ['#ufeff'],
+	});
+	client.addListener('raw', function(message) {
+		socket.emit("message", message.rawCommand);
+	});
 	socket.on("message", function(msg) {
-		console.log(msg);
+		client.send(msg);
+	});
+	socket.on('disconnect', function() {
+		client.disconnect("mintIrc (http://mintIrc.com/)");
 	});
 });
 
