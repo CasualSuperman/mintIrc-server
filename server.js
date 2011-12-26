@@ -30,15 +30,9 @@ function serve(res, filename) {
 	fs.readFile(filename,
 		function (err, data) {
 			if (err) {
-				switch(err.errno) {
-					case 34:
-						res.writeHead(404);
-						return res.end("404 - File not found");
-					default:
-						console.log(err);
-						res.writeHead(500);
-						return res.end("500 - Internal Application Error");
-				}
+				console.log(err);
+				res.writeHead(500);
+				return res.end("500 - Internal Application Error");
 			}
 			var type = mime.lookup(filename);
 			res.writeHead(200, {'Content-Type' : type});
