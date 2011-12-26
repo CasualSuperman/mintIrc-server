@@ -8,7 +8,55 @@ var app  = require('http').createServer(handler),
 	irc  = require('irc');
 
 io.set('log level', 1);
+io.configure(function() {
+	io.set('browser client minification', true);
+	io.set('browser client etag', true);
+	io.set('browser client gzip', true);
+	//io.set('browser client handler', true);
+});
 app.listen(80);
+
+var users = (function() {
+	var registered = [];
+	var info = {};
+
+	// Read users in from file.
+	var dir = "users";
+	if (!path.syncExists(dir)) {
+		fs.mkdirSync(dir, 0750);
+	} else {
+		// Get a list of users.
+	}
+
+	var isRegistered = function(username) {
+		username = username.toLowerCase();
+		return registered.indexOf(username) !== -1;
+	}
+
+	var getInfo = function(username) {
+		username = username.toLowerCase();
+		var data = info[username];
+		if (data) {
+			return data;
+		} else {
+			var file = path.join(dir, username);
+			if (path.existsSync(file)) {
+				info[username] = JSON.parse(fs.readFileSync(file));
+				info[username].exists = true;
+				return info[username];
+			} else {
+				return {exists: false};
+			}
+		}
+	}
+
+	return {
+		existsUser: isRegistered,
+		getUser: getInfo,
+		makeUser: newInfo,
+
+	}
+}());
 
 function handler(req, res) {
 	var uri = url.parse(req.url).pathname;
