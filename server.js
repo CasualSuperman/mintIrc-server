@@ -28,7 +28,11 @@ var users = (function() {
 		lib.fs.mkdirSync(dir, 0750);
 	} else {
 		// Get a list of users.
-
+		var isFile = function(elem) {
+			var path = lib.path.join(dir, elem);
+			return lib.fs.statSync(path).isFile();
+		};
+		registered = lib.fs.readdirSync(dir).filter(isFile);
 	}
 
 	var isRegistered = function(username) {
@@ -59,7 +63,6 @@ var users = (function() {
 		existsUser: isRegistered,
 		getUser: getInfo,
 		makeUser: newInfo,
-
 	}
 }());
 
