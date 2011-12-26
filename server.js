@@ -1,20 +1,22 @@
-var app  = require('http').createServer(handler),
-	io   = require('socket.io').listen(app),
-	fs   = require('fs'),
-	net  = require('net'),
-	url  = require('url'),
-	mime = require('mime'),
-	path = require('path'),
-	irc  = require('irc');
+var lib = {
+	app : require('http').createServer(handler),
+	fs  : require('fs'),
+	net : require('net'),
+	url : require('url'),
+	mime: require('mime'),
+	path: require('path'),
+	irc : require('irc'),
+};
+lib.app.listen(80);
 
-io.set('log level', 1);
-io.configure(function() {
-	io.set('browser client minification', true);
-	io.set('browser client etag', true);
-	io.set('browser client gzip', true);
+lib.io = require('socket.io').listen(lib.app);
+lib.io.set('log level', 1);
+lib.io.configure(function() {
+	lib.io.set('browser client minification', true);
+	lib.io.set('browser client etag', true);
+	lib.io.set('browser client gzip', true);
 	//io.set('browser client handler', true);
 });
-app.listen(80);
 
 var users = (function() {
 	var registered = [];
@@ -22,10 +24,11 @@ var users = (function() {
 
 	// Read users in from file.
 	var dir = "users";
-	if (!path.syncExists(dir)) {
-		fs.mkdirSync(dir, 0750);
+	if (!lib.path.existsSync(dir)) {
+		lib.fs.mkdirSync(dir, 0750);
 	} else {
 		// Get a list of users.
+
 	}
 
 	var isRegistered = function(username) {
@@ -39,9 +42,9 @@ var users = (function() {
 		if (data) {
 			return data;
 		} else {
-			var file = path.join(dir, username);
-			if (path.existsSync(file)) {
-				info[username] = JSON.parse(fs.readFileSync(file));
+			var file = lib.path.join(dir, username);
+			if (lib.path.existsSync(file)) {
+				info[username] = JSON.parse(lib.fs.readFileSync(file));
 				info[username].exists = true;
 				return info[username];
 			} else {
@@ -49,6 +52,8 @@ var users = (function() {
 			}
 		}
 	}
+
+	var newInfo = function(){};
 
 	return {
 		existsUser: isRegistered,
@@ -59,12 +64,12 @@ var users = (function() {
 }());
 
 function handler(req, res) {
-	var uri = url.parse(req.url).pathname;
-	var filename = path.join("ui", uri);
+	var uri = lib.url.parse(req.url).pathname;
+	var filename = lib.path.join("ui", uri);
 
-	path.exists(filename, function(exists) {
+	lib.path.exists(filename, function(exists) {
 		if (exists) {
-			if (fs.statSync(filename).isDirectory()) {
+			if (lib.fs.statSync(filename).isDirectory()) {
 				filename += "index.html";
 			}
 			serve(res, filename);
@@ -75,22 +80,22 @@ function handler(req, res) {
 	});
 }
 function serve(res, filename) {	
-	fs.readFile(filename,
+	lib.fs.readFile(filename,
 		function (err, data) {
 			if (err) {
 				console.log(err);
 				res.writeHead(500);
 				return res.end("500 - Internal Application Error");
 			}
-			var type = mime.lookup(filename);
+			var type = lib.mime.lookup(filename);
 			res.writeHead(200, {'Content-Type' : type});
 			res.end(data);
 		}
 	);
 }
 
-io.sockets.on('connection', function(socket) {
-	var client = new irc.Client('irc.foonetic.net', 'mintI-fresh', {
+lib.io.sockets.on('connection', function(socket) {
+	var client = new lib.irc.Client('irc.foonetic.net', 'mintI-fresh', {
 		channels: ['#ufeff'],
 	});
 	client.addListener('raw', function(message) {
