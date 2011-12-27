@@ -107,8 +107,3 @@ exports.verify = function(user, auth, call) {
 		});
 	});
 };
-
-exports.existsUser  = isRegistered;
-exports.getUser     = getInfo;
-exports.getUserSync = getInfoSync;
-exports.makeUser    = newInfo;
