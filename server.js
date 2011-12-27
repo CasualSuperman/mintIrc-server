@@ -6,7 +6,7 @@ var lib = {
 	mime: require('mime'),
 	path: require('path'),
 	irc : require('irc'),
-	user: require('./user'),
+	user: require('./user')('users'),
 };
 lib.app.listen(80);
 

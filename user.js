@@ -2,28 +2,18 @@ var lib = {
 	fs  : require('fs'),
 	path: require('path'),
 };
+
 var registered = [];
 var info = {};
+var dir = null;
 
 // Read users in from file.
-var dir = "users";
-if (!lib.path.existsSync(dir)) {
-	lib.fs.mkdirSync(dir, 0755);
-} else {
-	// Get a list of users.
-	var isFile = function(elem) {
-		var path = lib.path.join(dir, elem);
-		return lib.fs.statSync(path).isFile();
-	};
-	registered = lib.fs.readdirSync(dir).filter(isFile);
-}
-
-exports.isUser = function(username) {
+var isUser = function(username) {
 	username = username.toLowerCase();
 	return registered.indexOf(username) !== -1;
 }
 
-exports.getUserSync = function(username) {
+var getUserSync = function(username) {
 	username = username.toLowerCase();
 	var data = info[username];
 	if (data) {
@@ -40,7 +30,7 @@ exports.getUserSync = function(username) {
 	}
 }
 
-exports.getUser = function(username, callback) {
+var getUser = function(username, callback) {
 	username = username.toLowerCase();
 	var data = info[username];
 	if (data) {
@@ -69,7 +59,7 @@ var defaults = (function() {
 	}
 }());
 	
-exports.makeUser = function(user){
+var makeUser = function(user){
 	var username = user.username.toLowerCase();
 	var file = lib.path.join(dir, username);
 	if (isRegistered(username) || lib.path.existsSync(file)) {
@@ -85,7 +75,7 @@ exports.makeUser = function(user){
 	return true;
 };
 
-exports.syncDisk = function() {
+var syncDisk = function() {
 	info.forEach(function(user) {
 		if (user.modified) {
 			delete user.modified;
@@ -94,7 +84,7 @@ exports.syncDisk = function() {
 	});
 };
 
-exports.verify = function(user, auth, call) {
+var verify = function(user, auth, call) {
 	var answer = lib.https.request({
 		host: 'browserid.org',
 		path: '/verify?assertion=' + auth + '&audience=https://mintirc.com/',
@@ -107,3 +97,23 @@ exports.verify = function(user, auth, call) {
 		});
 	});
 };
+
+exports = module.exports = function(_dir) {
+	dir = _dir;
+	if (!lib.path.existsSync(_dir)) {
+		lib.fs.mkdirSync(_dir, 0755);
+	} else {
+		// Get a list of users.
+		var isFile = function(elem) {
+			var path = lib.path.join(_dir, elem);
+			return lib.fs.statSync(path).isFile();
+		};
+		registered = lib.fs.readdirSync(_dir).filter(isFile);
+	}
+	this.isUser = isUser;
+	this.getUser = getUser;
+	this.getUserSync = getUserSync;
+	this.makeUser = makeUser;
+	this.sync = syncDisk;
+	this.verify = verify;
+}
