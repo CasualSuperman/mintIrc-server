@@ -6,6 +6,7 @@ var lib = {
 	mime: require('mime'),
 	path: require('path'),
 	irc : require('irc'),
+	user: require('./user'),
 };
 lib.app.listen(80);
 
@@ -17,123 +18,6 @@ lib.io.configure(function() {
 	lib.io.set('browser client gzip', true);
 	//io.set('browser client handler', true);
 });
-
-var users = (function() {
-	var registered = [];
-	var info = {};
-
-	// Read users in from file.
-	var dir = "users";
-	if (!lib.path.existsSync(dir)) {
-		lib.fs.mkdirSync(dir, 0755);
-	} else {
-		// Get a list of users.
-		var isFile = function(elem) {
-			var path = lib.path.join(dir, elem);
-			return lib.fs.statSync(path).isFile();
-		};
-		registered = lib.fs.readdirSync(dir).filter(isFile);
-	}
-
-	var isRegistered = function(username) {
-		username = username.toLowerCase();
-		return registered.indexOf(username) !== -1;
-	}
-
-	var getInfoSync = function(username) {
-		username = username.toLowerCase();
-		var data = info[username];
-		if (data) {
-			return data;
-		} else {
-			var file = lib.path.join(dir, username);
-			if (lib.path.existsSync(file)) {
-				info[username] = JSON.parse(lib.fs.readFileSync(file));
-				info[username].exists = true;
-				return info[username];
-			} else {
-				return {exists: false};
-			}
-		}
-	}
-
-	var getInfo = function(username, callback) {
-		username = username.toLowerCase();
-		var data = info[username];
-		if (data) {
-			callback(data);
-		} else {
-			var file = lib.path.join(dir, username);
-			lib.path.exists(file, function(exists) {
-				if (exists) {
-					info[username] = JSON.parse(lib.fs.readFileSync(file));
-					info[username].exists = true;
-					callback(info[username]);
-				} else {
-					callback({exists: false});
-				}
-			});
-		}
-	}
-
-	var defaults = (function() {
-		var init = {
-			userLevel: 0,
-		};
-		var templ = JSON.stringify(init);
-		return function clone() {
-			return JSON.parse(templ);
-		}
-	}());
-
-	var newInfo = function(user){
-		var username = user.username.toLowerCase();
-		var file = lib.path.join(dir, username);
-		if (isRegistered(username) || lib.path.existsSync(file)) {
-			// path.exists should never happen, but just to be safe..
-			return false;
-		}
-		var base = defaults();
-		base.email = user.email;
-		base.username = user.username;
-		base.modified = true;
-		info[username] = base;
-		registered.push(username);
-		return true;
-	};
-
-	var syncDisk = function() {
-		info.forEach(function(user) {
-			if (user.modified) {
-				delete user.modified;
-
-				lib.fs.writeFile(file, JSON.stringify());
-			}
-		});
-	};
-
-	var verify = function(user, auth, call) {
-		var answer = lib.https.request({
-			host: 'browserid.org',
-			path: '/verify?assertion=' + auth + '&audience=https://mintirc.com/',
-			method: 'POST',
-		}, function verify(ans) {
-			ans.on('data', function(d) {
-				var result = JSON.parse(d);
-				result.username = user;
-				call(result);
-			});
-		});
-				
-	};
-
-	return {
-		existsUser:  isRegistered,
-		getUser:     getInfo,
-		getUserSync: getInfoSync,
-		makeUser:    newInfo,
-	}
-}());
 
 function handler(req, res) {
 	var uri = lib.url.parse(req.url).pathname;
