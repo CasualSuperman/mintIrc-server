@@ -1,6 +1,7 @@
 var lib = {
-	fs  : require('fs'),
-	path: require('path'),
+	fs    : require('fs'),
+	path  : require('path'),
+	crypto: require('crypto'),
 };
 
 var registered = [];
@@ -8,40 +9,42 @@ var info = {};
 var dir = null;
 
 // Read users in from file.
-var isUser = function(username) {
+var isUser = function(email) {
 	username = username.toLowerCase();
-	return registered.indexOf(username) !== -1;
+	return registered.indexOf(email) !== -1;
 }
 
-var getUserSync = function(username) {
-	username = username.toLowerCase();
-	var data = info[username];
+var getUserSync = function(email) {
+	email = email.toLowerCase();
+	email = lib.crypto.createHash('md5').update(email).digest('hex');
+	var data = info[email];
 	if (data) {
 		return data;
 	} else {
-		var file = lib.path.join(dir, username);
+		var file = lib.path.join(dir, email);
 		if (lib.path.existsSync(file)) {
-			info[username] = JSON.parse(lib.fs.readFileSync(file));
-			info[username].exists = true;
-			return info[username];
+			info[email] = JSON.parse(lib.fs.readFileSync(file));
+			info[email].exists = true;
+			return info[email];
 		} else {
 			return {exists: false};
 		}
 	}
 }
 
-var getUser = function(username, callback) {
-	username = username.toLowerCase();
-	var data = info[username];
+var getUser = function(email, callback) {
+	email = email.toLowerCase();
+	email = lib.crypto.createHash('md5').update(email).digest('hex');
+	var data = info[email];
 	if (data) {
 		callback(data);
 	} else {
-		var file = lib.path.join(dir, username);
+		var file = lib.path.join(dir, email);
 		lib.path.exists(file, function(exists) {
 			if (exists) {
-				info[username] = JSON.parse(lib.fs.readFileSync(file));
-				info[username].exists = true;
-				callback(info[username]);
+				info[email] = JSON.parse(lib.fs.readFileSync(file));
+				info[email].exists = true;
+				callback(info[email]);
 			} else {
 				callback({exists: false});
 			}
@@ -60,9 +63,10 @@ var defaults = (function() {
 }());
 	
 var makeUser = function(user){
-	var username = user.username.toLowerCase();
-	var file = lib.path.join(dir, username);
-	if (isRegistered(username) || lib.path.existsSync(file)) {
+	var email = user.email.toLowerCase();
+	email = lib.crypto.createHash('md5').update(email).digest('hex');
+	var file = lib.path.join(dir, email);
+	if (isRegistered(email) || lib.path.existsSync(file)) {
 		// path.exists should never happen, but just to be safe..
 		return false;
 	}
@@ -70,8 +74,8 @@ var makeUser = function(user){
 	base.email = user.email;
 	base.username = user.username;
 	base.modified = true;
-	info[username] = base;
-	registered.push(username);
+	info[email] = base;
+	registered.push(email);
 	return true;
 };
 
@@ -79,12 +83,13 @@ var syncDisk = function() {
 	info.forEach(function(user) {
 		if (user.modified) {
 			delete user.modified;
+			// TODO: Finish this
 			lib.fs.writeFile(file, JSON.stringify(user));
 		}
 	});
 };
 
-var verify = function(user, auth, call) {
+var verify = function(username, auth, call) {
 	var answer = lib.https.request({
 		host: 'browserid.org',
 		path: '/verify?assertion=' + auth + '&audience=https://mintirc.com/',
@@ -92,7 +97,7 @@ var verify = function(user, auth, call) {
 	}, function verify(ans) {
 		ans.on('data', function(d) {
 			var result = JSON.parse(d);
-			result.username = user;
+			result.username = username;
 			call(result);
 		});
 	});
