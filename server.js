@@ -1,23 +1,26 @@
-var lib = {
-	app : require('http').createServer(handler),
-	fs  : require('fs'),
-	net : require('net'),
-	url : require('url'),
-	mime: require('mime'),
-	path: require('path'),
-	irc : require('irc'),
-	user: require('./user')('users'),
-};
-lib.app.listen(80);
+var lib = {};
+(function setup() {
+	lib = {
+		app : require('http').createServer(handler),
+		fs  : require('fs'),
+		net : require('net'),
+		url : require('url'),
+		mime: require('mime'),
+		path: require('path'),
+		irc : require('irc'),
+		user: require('./user')('users'),
+	};
+	lib.app.listen(80);
+	
+	lib.io = require('socket.io').listen(lib.app);
+	lib.io.set('log level', 1);
+	lib.io.configure(function config() {
+		lib.io.set('browser client minification', true);
+		lib.io.set('browser client etag', true);
+		lib.io.set('browser client gzip', true);
+	});
+}())
 
-lib.io = require('socket.io').listen(lib.app);
-lib.io.set('log level', 1);
-lib.io.configure(function() {
-	lib.io.set('browser client minification', true);
-	lib.io.set('browser client etag', true);
-	lib.io.set('browser client gzip', true);
-	//io.set('browser client handler', true);
-});
 
 function handler(req, res) {
 	var uri = lib.url.parse(req.url).pathname;
