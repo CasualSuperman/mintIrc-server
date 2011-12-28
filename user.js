@@ -14,7 +14,8 @@ var dir = null;
 var md5 = (function() {
 	// Cache of hashed emails. Cause hashing is relatively slow.
 	var hashCache = {};
-	
+
+	// Check cache first, otherwise compute and store it.	
 	return function md5lookup(data) {
 		data = data.toLowerCase();
 		if (hashCache[data]) {
@@ -30,23 +31,28 @@ var isUser = function(email) {
 	return registered.indexOf(md5(email)) !== -1;
 }
 
+// Gets user info synchronously.
 var getUserSync = function(email) {
 	var hash = md5(email);
 	var data = info[hash];
+	// If it's in the cache, return it.
 	if (data) {
 		return data;
 	} else {
+		// Otherwise, load it from the file.
 		var file = lib.path.join(dir, hash);
 		if (lib.path.existsSync(file)) {
 			info[hash] = JSON.parse(lib.fs.readFileSync(file));
 			info[hash].exists = true;
 			return info[hash];
 		} else {
+			// No such user.
 			return {exists: false};
 		}
 	}
 }
 
+// Gets user info asynchronously. See getUserSync
 var getUser = function(email, callback) {
 	var hash = md5(email);
 	var data = info[hash];
@@ -66,6 +72,7 @@ var getUser = function(email, callback) {
 	}
 }
 
+// A helper function with default user properties
 var defaults = (function() {
 	var init = {
 		userLevel: 0,
@@ -75,7 +82,8 @@ var defaults = (function() {
 		return JSON.parse(templ);
 	}
 }());
-	
+
+// Creates a user. Takes a mysterious "user object".
 var makeUser = function(user){
 	var hash = md5(user.email);
 	var file = lib.path.join(dir, hash);
@@ -92,6 +100,7 @@ var makeUser = function(user){
 	return true;
 };
 
+// Syncs all modified users to disk.
 var syncDisk = function() {
 	info.forEach(function(user) {
 		if (user.modified) {
@@ -102,6 +111,7 @@ var syncDisk = function() {
 	});
 };
 
+// Verifies a browserid auth token.
 var verify = function(username, auth, call) {
 	var answer = lib.https.request({
 		host: 'browserid.org',
