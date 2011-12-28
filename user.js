@@ -8,9 +8,9 @@ var registered = [];
 var info = {};
 var dir = null;
 
-// Read users in from file.
 var isUser = function(email) {
-	username = username.toLowerCase();
+	email = email.toLowerCase();
+	email = lib.crypto.createHash('md5').update(email).digest('hex');
 	return registered.indexOf(email) !== -1;
 }
 
@@ -104,6 +104,7 @@ var verify = function(username, auth, call) {
 };
 
 exports = module.exports = function(_dir) {
+	// Read users in from file.
 	dir = _dir;
 	if (!lib.path.existsSync(_dir)) {
 		lib.fs.mkdirSync(_dir, 0755);
