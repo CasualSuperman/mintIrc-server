@@ -8,18 +8,22 @@ var lib = {
 var registered = [];
 // Holds cached user information, indexed by hashed email.
 var info = {};
-// Cache of hashed emails. Cause hashing is relatively slow.
-var hashCache = {};
 // The directory to check for users in.
 var dir = null;
 
-var md5 = function(data) {
-	data = data.toLowerCase();
-	if (hashCache[data]) {
-		return hashCache[data];
+var md5 = (function() {
+	// Cache of hashed emails. Cause hashing is relatively slow.
+	var hashCache = {};
+	
+	return function md5lookup(data) {
+		data = data.toLowerCase();
+		if (hashCache[data]) {
+			return hashCache[data];
+		}
+		var hash = lib.crypto.createHash('md5').update(data).digest('hex');
+		return hashCache[data] = hash;
 	}
-	return hashCache[data] = lib.crypto.createHash('md5').update(data).digest('hex');
-}
+}());
 
 // Checks the populated email list for user existence
 var isUser = function(email) {
