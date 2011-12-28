@@ -76,6 +76,10 @@ var getUser = function(email, callback) {
 var defaults = (function() {
 	var init = {
 		userLevel: 0,
+		autorun: {
+			encrypted: false,
+			payload: JSON.stringify({}),
+		},
 	};
 	var templ = JSON.stringify(init);
 	return function clone() {
