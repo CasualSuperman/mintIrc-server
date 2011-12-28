@@ -13,25 +13,30 @@ var hashCache = {};
 // The directory to check for users in.
 var dir = null;
 
+var md5 = function(data) {
+	data = data.toLowerCase();
+	if (hashCache[data]) {
+		return hashCache[data];
+	}
+	return hashCache[data] = lib.crypto.createHash('md5').update(data).digest('hex');
+}
+
 // Checks the populated email list for user existence
 var isUser = function(email) {
-	email = email.toLowerCase();
-	email = lib.crypto.createHash('md5').update(email).digest('hex');
-	return registered.indexOf(email) !== -1;
+	return registered.indexOf(md5(email)) !== -1;
 }
 
 var getUserSync = function(email) {
-	email = email.toLowerCase();
-	email = lib.crypto.createHash('md5').update(email).digest('hex');
-	var data = info[email];
+	var hash = md5(email);
+	var data = info[hash];
 	if (data) {
 		return data;
 	} else {
-		var file = lib.path.join(dir, email);
+		var file = lib.path.join(dir, hash);
 		if (lib.path.existsSync(file)) {
-			info[email] = JSON.parse(lib.fs.readFileSync(file));
-			info[email].exists = true;
-			return info[email];
+			info[hash] = JSON.parse(lib.fs.readFileSync(file));
+			info[hash].exists = true;
+			return info[hash];
 		} else {
 			return {exists: false};
 		}
@@ -39,18 +44,17 @@ var getUserSync = function(email) {
 }
 
 var getUser = function(email, callback) {
-	email = email.toLowerCase();
-	email = lib.crypto.createHash('md5').update(email).digest('hex');
-	var data = info[email];
+	var hash = md5(email);
+	var data = info[hash];
 	if (data) {
 		callback(data);
 	} else {
-		var file = lib.path.join(dir, email);
+		var file = lib.path.join(dir, hash);
 		lib.path.exists(file, function(exists) {
 			if (exists) {
-				info[email] = JSON.parse(lib.fs.readFileSync(file));
-				info[email].exists = true;
-				callback(info[email]);
+				info[hash] = JSON.parse(lib.fs.readFileSync(file));
+				info[hash].exists = true;
+				callback(info[hash]);
 			} else {
 				callback({exists: false});
 			}
@@ -69,10 +73,9 @@ var defaults = (function() {
 }());
 	
 var makeUser = function(user){
-	var email = user.email.toLowerCase();
-	email = lib.crypto.createHash('md5').update(email).digest('hex');
-	var file = lib.path.join(dir, email);
-	if (isRegistered(email) || lib.path.existsSync(file)) {
+	var hash = md5(user.email);
+	var file = lib.path.join(dir, hash);
+	if (isRegistered(user.email) || lib.path.existsSync(file)) {
 		// path.exists should never happen, but just to be safe..
 		return false;
 	}
@@ -80,8 +83,8 @@ var makeUser = function(user){
 	base.email = user.email;
 	base.username = user.username;
 	base.modified = true;
-	info[email] = base;
-	registered.push(email);
+	info[hash] = base;
+	registered.push(user.email);
 	return true;
 };
 
