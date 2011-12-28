@@ -92,7 +92,7 @@ var syncDisk = function() {
 var verify = function(username, auth, call) {
 	var answer = lib.https.request({
 		host: 'browserid.org',
-		path: '/verify?assertion=' + auth + '&audience=https://mintirc.com/',
+		path: '/verify?assertion=' + auth.hash + '&audience=' auth.addr,
 		method: 'POST',
 	}, function verify(ans) {
 		ans.on('data', function(d) {
