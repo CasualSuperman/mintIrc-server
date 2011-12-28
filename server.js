@@ -1,7 +1,7 @@
 var lib = {};
 (function setup() {
 	lib = {
-		app : require('http').createServer(handler),
+		app : require('http').createServer(handle),
 		fs  : require('fs'),
 		net : require('net'),
 		url : require('url'),
@@ -22,36 +22,38 @@ var lib = {};
 }())
 
 
-function handler(req, res) {
-	var uri = lib.url.parse(req.url).pathname;
-	var filename = lib.path.join("ui", uri);
+var handle = (function() {
+	var serve = function(res, filename) {	
+		lib.fs.readFile(filename,
+			function sendFile(err, data) {
+				if (err) {
+					console.log(err);
+					res.writeHead(500);
+					return res.end("500 - Internal Application Error");
+				}
+				var type = lib.mime.lookup(filename);
+				res.writeHead(200, {'Content-Type' : type});
+				res.end(data);
+			}
+		);
+	};
+	return function handler(req, res) {
+		var uri = lib.url.parse(req.url).pathname;
+		var filename = lib.path.join("ui", uri);
 
-	lib.path.exists(filename, function(exists) {
-		if (exists) {
-			if (lib.fs.statSync(filename).isDirectory()) {
-				filename += "index.html";
+		lib.path.exists(filename, function(exists) {
+			if (exists) {
+				if (lib.fs.statSync(filename).isDirectory()) {
+					filename += "index.html";
+				}
+				serve(res, filename);
+			} else {
+				res.writeHead(404);
+				return res.end("404 - File not found");
 			}
-			serve(res, filename);
-		} else {
-			res.writeHead(404);
-			return res.end("404 - File not found");
-		}
-	});
-}
-function serve(res, filename) {	
-	lib.fs.readFile(filename,
-		function (err, data) {
-			if (err) {
-				console.log(err);
-				res.writeHead(500);
-				return res.end("500 - Internal Application Error");
-			}
-			var type = lib.mime.lookup(filename);
-			res.writeHead(200, {'Content-Type' : type});
-			res.end(data);
-		}
-	);
-}
+		});
+	}
+}());
 
 lib.io.sockets.on('connection', function(socket) {
 	var client = new lib.irc.Client('irc.foonetic.net', 'mintI-fresh', {
