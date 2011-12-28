@@ -4,10 +4,16 @@ var lib = {
 	crypto: require('crypto'),
 };
 
+// Holds a list of hashed emails
 var registered = [];
+// Holds cached user information, indexed by hashed email.
 var info = {};
+// Cache of hashed emails. Cause hashing is relatively slow.
+var hashCache = {};
+// The directory to check for users in.
 var dir = null;
 
+// Checks the populated email list for user existence
 var isUser = function(email) {
 	email = email.toLowerCase();
 	email = lib.crypto.createHash('md5').update(email).digest('hex');
