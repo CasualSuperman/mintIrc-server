@@ -87,7 +87,7 @@ var defaults = (function() {
 var makeUser = function(user){
 	var hash = md5(user.email);
 	var file = lib.path.join(dir, hash);
-	if (isRegistered(user.email) || lib.path.existsSync(file)) {
+	if (isUser(hash) || lib.path.existsSync(file)) {
 		// path.exists should never happen, but just to be safe..
 		return false;
 	}
@@ -96,7 +96,7 @@ var makeUser = function(user){
 	base.username = user.username;
 	base.modified = true;
 	info[hash] = base;
-	registered.push(user.email);
+	registered.push(hash);
 	return true;
 };
 
@@ -139,10 +139,12 @@ exports = module.exports = function(_dir) {
 		};
 		registered = lib.fs.readdirSync(_dir).filter(isFile);
 	}
-	this.isUser = isUser;
-	this.getUser = getUser;
-	this.getUserSync = getUserSync;
-	this.makeUser = makeUser;
-	this.sync = syncDisk;
-	this.verify = verify;
+	var ret = {};
+	ret.isUser = isUser;
+	ret.getUser = getUser;
+	ret.getUserSync = getUserSync;
+	ret.makeUser = makeUser;
+	ret.sync = syncDisk;
+	ret.verify = verify;
+	return ret;
 }

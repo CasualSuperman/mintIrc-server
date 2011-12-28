@@ -69,4 +69,3 @@ lib.io.sockets.on('connection', function(socket) {
 		client.disconnect("mintIrc (http://mintIrc.com/)");
 	});
 });
-
