@@ -21,6 +21,7 @@ var lib = {};
 	});
 }())
 
+var onlineUsers = {};
 
 var handle = (function() {
 	var serve = function(res, filename) {	
@@ -56,16 +57,49 @@ var handle = (function() {
 }());
 
 lib.io.sockets.on('connection', function(socket) {
-	var client = new lib.irc.Client('irc.foonetic.net', 'mintI-fresh', {
-		channels: ['#ufeff'],
+	var user = new User();
+	socket.on("login", function login(info) {
+		var oldUser = user;
+		lib.user.verify(info.auth, function changeUser(response) {
+			if (response.status === "okay") {
+				user = new User(info.user);
+				user.conns = oldUser.conns;
+				socket.emit('login_passed', response);
+			} else {
+				socket.emit('login_failed');
+			}
+		});
 	});
 	client.addListener('raw', function(message) {
 		socket.emit("message", message.rawCommand);
 	});
-	socket.on("message", function(msg) {
+	socket.on('message', function(msg) {
 		client.send(msg);
 	});
 	socket.on('disconnect', function() {
 		client.disconnect("mintIrc (http://mintIrc.com/)");
 	});
 });
+
+var User = function(nick) {
+	if (nick === undefined) {
+		nick = pickRandomNick();
+	}
+	this.nick = nick;
+	this.conns = {
+		irc: {}, // irc[addr] = conn
+		web: [], // loop
+	};
+};
+
+var ircDefaults = {
+	userName: 'mintIrc',
+};
+
+User.prototype = {
+	joinServer: function(addr) {
+		if (!this.conns.irc[addr]) {
+			this.conns.irc[addr] = new lib.irc.Client(addr, this.nick, ircDefaults);
+		}
+	},
+};

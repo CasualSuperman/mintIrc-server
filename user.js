@@ -109,14 +109,14 @@ var syncDisk = function() {
 	info.forEach(function(user) {
 		if (user.modified) {
 			delete user.modified;
-			// TODO: Finish this
+			var file = lib.path.join(dir, md5(user.email));
 			lib.fs.writeFile(file, JSON.stringify(user));
 		}
 	});
 };
 
 // Verifies a browserid auth token.
-var verify = function(username, auth, call) {
+var verify = function(auth, call) {
 	var answer = lib.https.request({
 		host: 'browserid.org',
 		path: ('/verify?assertion=' + auth.hash + '&audience=' + auth.addr),
@@ -124,7 +124,6 @@ var verify = function(username, auth, call) {
 	}, function verify(ans) {
 		ans.on('data', function(d) {
 			var result = JSON.parse(d);
-			result.username = username;
 			call(result);
 		});
 	});
