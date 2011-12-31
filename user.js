@@ -63,7 +63,6 @@ var getUser = function(email, callback) {
 		lib.path.exists(file, function(exists) {
 			if (exists) {
 				info[hash] = JSON.parse(lib.fs.readFileSync(file));
-				info[hash].exists = true;
 				callback(info[hash]);
 			} else {
 				callback({exists: false});
@@ -80,6 +79,7 @@ var defaults = (function() {
 			encrypted: false,
 			payload: JSON.stringify({}),
 		},
+		exists: true,
 	};
 	var templ = JSON.stringify(init);
 	return function clone() {

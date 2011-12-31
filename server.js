@@ -57,21 +57,21 @@ var handle = (function() {
 }());
 
 lib.io.sockets.on('connection', function(socket) {
-	var user = new User();
-	socket.on("login", function login(info) {
-		var oldUser = user;
-		lib.user.verify(info.auth, function changeUser(response) {
+	
+	socket.on("login", function login(auth) {
+		lib.user.verify(auth, function changeUser(response) {
 			if (response.status === "okay") {
-				user = new User(info.user);
-				user.conns = oldUser.conns;
-				socket.emit('login_passed', response);
+				var user = onlineUsers[info.email];
+				if (!user) {
+					user = new OnlineUser(info.user);
+					user.conns = oldUser.conns;
+					socket.emit('login_passed', response);
+				}
+				user = newUser;
 			} else {
 				socket.emit('login_failed');
 			}
 		});
-	});
-	client.addListener('raw', function(message) {
-		socket.emit("message", message.rawCommand);
 	});
 	socket.on('message', function(msg) {
 		client.send(msg);
@@ -81,25 +81,26 @@ lib.io.sockets.on('connection', function(socket) {
 	});
 });
 
-var User = function(nick) {
-	if (nick === undefined) {
-		nick = pickRandomNick();
-	}
-	this.nick = nick;
+var OnlineUser = function(user) {
 	this.conns = {
 		irc: {}, // irc[addr] = conn
 		web: [], // loop
 	};
 };
 
-var ircDefaults = {
-	userName: 'mintIrc',
-};
-
-User.prototype = {
+OnlineUser.prototype = {
+	broadcast: function(msg) {
+		this.conns.web.forEach(function(conn) {
+			conn.emit('message', msg);
+		});
+	},
 	joinServer: function(addr) {
 		if (!this.conns.irc[addr]) {
-			this.conns.irc[addr] = new lib.irc.Client(addr, this.nick, ircDefaults);
+			var conn = new lib.irc.Client(addr, this.nick, {userName: 'mintIrc'});
+			this.conns.irc[addr] = conn;
+			conn.addListener('raw', function(message) {
+				this.broadcast({addr: addr, msg: message.rawCommand});
+			});
 		}
 	},
 };
