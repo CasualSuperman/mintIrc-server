@@ -15,11 +15,6 @@ var setup = (function() {
 	
 	lib.io = require('socket.io').listen(lib.app);
 	lib.io.set('log level', 1);
-	lib.io.configure(function config() {
-		lib.io.set('browser client minification', true);
-		lib.io.set('browser client etag', true);
-		lib.io.set('browser client gzip', true);
-	});
 });
 
 // Simple file handling.
