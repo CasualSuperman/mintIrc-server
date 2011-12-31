@@ -1,5 +1,6 @@
 var lib = {};
-(function setup() {
+// Setup: lib loading, etc.
+var setup = (function() {
 	lib = {
 		app : require('http').createServer(handle),
 		fs  : require('fs'),
@@ -19,10 +20,9 @@ var lib = {};
 		lib.io.set('browser client etag', true);
 		lib.io.set('browser client gzip', true);
 	});
-}())
+});
 
-var onlineUsers = {};
-
+// Simple file handling.
 var handle = (function() {
 	var serve = function(res, filename) {	
 		lib.fs.readFile(filename,
@@ -55,9 +55,56 @@ var handle = (function() {
 		});
 	}
 }());
+// Start serving http.
+setup();
+
+// All online users are stored here for session-sharing.
+var onlineUsers = {};
 
 lib.io.sockets.on('connection', function(socket) {
+	var events = {
+		login: function(auth) {
+			lib.user.verify(auth, function login(user) {
+				if (user.status !== "okay") {
+					socket.emit('login_failed', user);
+					return;
+				}
+				if (lib.user.isUser(user.email)) {
+					var localUser = lib.user.getUserSync(user.email);
+					var online = onlineUsers[user.email];
+					if (online) {
+						socket.set('user', online);
+					} else {
+						online = onlineUsers[user.email] = new OnlineUser(auth, localUser);
+					}
+					online.addWebConn(socket);
+					socket.emit('login_passed', localUser);
+				} else {
+					socket.emit('register', user);
+				}
+			});
+		},
+		logout: function() {
 	
+		},
+		guest: function() {
+	
+		},
+		register: function(info) {
+	
+		},
+		disconnect: function() {
+			var user = socket.get('user');
+			if (user) {
+				user.disconnect(socket);
+			}
+		},
+	};
+	for (var event in events) {
+		if (events.hasOwnProperty(event)) {
+			socket.on(event, events[event]);
+		}
+	}
 	socket.on("login", function login(auth) {
 		lib.user.verify(auth, function changeUser(response) {
 			if (response.status === "okay") {
@@ -76,12 +123,10 @@ lib.io.sockets.on('connection', function(socket) {
 	socket.on('message', function(msg) {
 		client.send(msg);
 	});
-	socket.on('disconnect', function() {
-		client.disconnect("mintIrc (http://mintIrc.com/)");
-	});
 });
 
-var OnlineUser = function(user) {
+var OnlineUser = function(auth, local) {
+	this.info = local;
 	this.conns = {
 		irc: {}, // irc[addr] = conn
 		web: [], // loop
@@ -101,6 +146,19 @@ OnlineUser.prototype = {
 			conn.addListener('raw', function(message) {
 				this.broadcast({addr: addr, msg: message.rawCommand});
 			});
+		}
+	},
+	disconnect: function(sock) {
+		var index = this.conns.web.indexOf(sock);
+		if (index >= 0) {
+			this.conns.web.splice(index, 1);
+		}
+		if (this.conns.web.length === 0) {
+			if (!this.persist) {
+				this.conns.irc.forEach(function(client) {
+					client.disconnect("mintIrc (http://mintIrc.com/)");
+				});
+			}
 		}
 	},
 };
