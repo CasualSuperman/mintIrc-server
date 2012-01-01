@@ -58,65 +58,66 @@ var onlineUsers = {};
 
 lib.io.sockets.on('connection', function(socket) {
 	var events = {
-		login: function(auth) {
-			lib.user.verify(auth, function login(user) {
-				if (user.status !== "okay") {
-					socket.emit('login_failed', user);
-					return;
-				}
-				if (lib.user.isUser(user.email)) {
-					var localUser = lib.user.getUserSync(user.email);
-					var online = onlineUsers[user.email];
-					if (online) {
-						socket.set('user', online);
-					} else {
-						online = onlineUsers[user.email] = new OnlineUser(auth, localUser);
+		mintI: {
+			login: function(auth) {
+				lib.user.verify(auth, function login(user) {
+					if (user.status !== "okay") {
+						socket.emit('login_failed', user);
+						return;
 					}
-					online.addWebConn(socket);
-					socket.emit('login_passed', localUser);
-				} else {
-					socket.emit('register', user);
+					if (lib.user.isUser(user.email)) {
+						var localUser = lib.user.getUserSync(user.email);
+						var online = onlineUsers[user.email];
+						if (online) {
+							socket.set('user', online);
+						} else {
+							online = onlineUsers[user.email] = new OnlineUser(auth, localUser);
+						}
+						online.addWebConn(socket);
+						socket.emit('login_passed', localUser);
+					} else {
+						socket.emit('register', user);
+					}
+				});
+			},
+			logout: function() {
+				var user = socket.get('user');
+				if (user) {
+					user.disconnect(socket);		
 				}
-			});
+			},
+			guest: function() {
+				socket.set('user', new OnlineUser());
+			},
+			register: function(info) {
+			},
 		},
-		logout: function() {
-	
-		},
-		guest: function() {
-	
-		},
-		register: function(info) {
-	
-		},
-		disconnect: function() {
-			var user = socket.get('user');
-			if (user) {
-				user.disconnect(socket);
-			}
+		irc: {
+			say: function(info) {
+				var user = socket.get('user');
+				if (user) {
+					var conn = user.getServer(info.addr);
+					if (conn) {
+						conn.say(info.target, info.msg);
+						user.broadcast(info);
+					}
+				}
+			},
+			connect: function(serv) {
+				
+			},
 		},
 	};
-	for (var event in events) {
-		if (events.hasOwnProperty(event)) {
-			socket.on(event, events[event]);
+	(['mintI', 'irc']).forEach(function(namespace) {
+		for (var event in events[namespace]) {
+			socket.on(namespace + '-' + event, events[namespace][event]);
 		}
-	}
-	socket.on("login", function login(auth) {
-		lib.user.verify(auth, function changeUser(response) {
-			if (response.status === "okay") {
-				var user = onlineUsers[info.email];
-				if (!user) {
-					user = new OnlineUser(info.user);
-					user.conns = oldUser.conns;
-					socket.emit('login_passed', response);
-				}
-				user = newUser;
-			} else {
-				socket.emit('login_failed');
-			}
-		});
 	});
-	socket.on('message', function(msg) {
-		client.send(msg);
+	socket.on('disconnect', function() {
+		var user = socket.get('user');
+		if (user) {
+			user.disconnect(socket);
+		}
 	});
 });
 
@@ -129,9 +130,13 @@ var OnlineUser = function(auth, local) {
 };
 
 OnlineUser.prototype = {
-	broadcast: function(msg) {
+	getServer: function(addr) {
+		var irc = this.conns.irc[addr];
+		return irc;
+	},
+	broadcast: function(type, msg) {
 		this.conns.web.forEach(function(conn) {
-			conn.emit('message', msg);
+			conn.emit(type, msg);
 		});
 	},
 	joinServer: function(addr) {
@@ -139,7 +144,7 @@ OnlineUser.prototype = {
 			var conn = new lib.irc.Client(addr, this.nick, {userName: 'mintIrc'});
 			this.conns.irc[addr] = conn;
 			conn.addListener('raw', function(message) {
-				this.broadcast({addr: addr, msg: message.rawCommand});
+				this.broadcast('message',{addr: addr, msg: message.rawCommand});
 			});
 		}
 	},
