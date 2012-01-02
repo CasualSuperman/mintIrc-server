@@ -1,7 +1,7 @@
 var lib = {
-	fs    : require('fs'),
-	path  : require('path'),
-	crypto: require('crypto'),
+	fs  : require('fs'),
+	path: require('path'),
+	sha1: require('./sha1')(100),
 };
 
 // Holds a list of hashed emails
@@ -10,30 +10,17 @@ var registered = [];
 var info = {};
 // The directory to check for users in.
 var dir = null;
-
-var md5 = (function() {
-	// Cache of hashed emails. Cause hashing is relatively slow.
-	var hashCache = {};
-
-	// Check cache first, otherwise compute and store it.	
-	return function md5lookup(data) {
-		data = data.toLowerCase();
-		if (hashCache[data]) {
-			return hashCache[data];
-		}
-		var hash = lib.crypto.createHash('md5').update(data).digest('hex');
-		return hashCache[data] = hash;
-	}
-}());
+// Local.
+var sha1 = lib.sha1;
 
 // Checks the populated email list for user existence
 var isUser = function(email) {
-	return registered.indexOf(md5(email)) !== -1;
+	return registered.indexOf(sha1(email)) !== -1;
 }
 
 // Gets user info synchronously.
 var getUserSync = function(email) {
-	var hash = md5(email);
+	var hash = sha1(email);
 	var data = info[hash];
 	// If it's in the cache, return it.
 	if (data) {
@@ -54,7 +41,7 @@ var getUserSync = function(email) {
 
 // Gets user info asynchronously. See getUserSync
 var getUser = function(email, callback) {
-	var hash = md5(email);
+	var hash = sha1(email);
 	var data = info[hash];
 	if (data) {
 		callback(data);
@@ -89,7 +76,7 @@ var defaults = (function() {
 
 // Creates a user. Takes a mysterious "user object".
 var makeUser = function(user){
-	var hash = md5(user.email);
+	var hash = sha1(user.email);
 	var file = lib.path.join(dir, hash);
 	if (isUser(hash) || lib.path.existsSync(file)) {
 		// path.exists should never happen, but just to be safe..
@@ -109,7 +96,7 @@ var syncDisk = function() {
 	info.forEach(function(user) {
 		if (user.modified) {
 			delete user.modified;
-			var file = lib.path.join(dir, md5(user.email));
+			var file = lib.path.join(dir, sha1(user.email));
 			lib.fs.writeFile(file, JSON.stringify(user));
 		}
 	});
