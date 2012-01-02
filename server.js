@@ -13,7 +13,7 @@ var setup = (function() {
 	};
 	lib.app.listen(80);
 	
-	lib.io = require('socket.io').listen(lib.app);
+	lib.io = require('socket.io').listen(33111);
 	lib.io.set('log level', 1);
 });
 
@@ -114,6 +114,7 @@ lib.io.sockets.on('connection', function(socket) {
 		}
 	});
 	socket.on('disconnect', function() {
+
 		var user = socket.get('user');
 		if (user) {
 			user.disconnect(socket);
