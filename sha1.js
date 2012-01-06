@@ -1,34 +1,39 @@
+// Libraries
 var lib = {
 	crypto: require('crypto'),
+};
+
+// our Configuration
+var config = {
+	cache: -1,
+};
+
+// The Cache
+var hashCache = {
+	last: [],
+};
+var shrinkToSize = function() {
+	while (hashCache.last.length > config.cache) {
+		delete hashCache[hashCache.last.shift()];
+	}
 };
 
 // Caches no results
 var noCache = function(data) {
 	return lib.crypto.createHash('sha1').update(data).digest('hex');
 };
+
 // Caches some results
-var allCache = (function() {
-	// Cache of hashed emails in a local scope.
-	var hashCache = {};
-	return function sha1(data) {
-		var hash = hashCache[data];
-		if (hash) {
-			return hash;
-		}
-		return hashCache[data] = noCache(data);
-	};
-}());
+var allCache = function(data) {
+	var hash = hashCache[data];
+	if (hash) {
+		return hash;
+	}
+	return hashCache[data] = noCache(data);
+};
+
 // Caches a client-supplied number of results
-var someCache = function makeSomeHash(count) {
-	var hashCache = {
-		last: [],
-	};
-	var shrinkToSize = function() {
-		while (hashCache.last.length > count) {
-			delete hashCache[hashCache.last.shift()];
-		}
-	};
-	return function sha1(data) {
+var someCache = function(data) {
 		var hash = hashCache[data];
 		if (hash) {
 			return hash;
@@ -40,13 +45,13 @@ var someCache = function makeSomeHash(count) {
 	};
 };
 
-module.exports = function sha1_init(cacheSize) {
-	switch(cacheSize) {
+module.exports = function sha1(data) {
+	switch(config.cache) {
 		case 0:
-			return noCache;
+			return noCache(data);
 		case -1:
-			return allCache;
+			return allCache(data);
 		default:
-			return someCache(cacheSize);
+			return someCache(data); //(cacheSize);
 	}
 };
