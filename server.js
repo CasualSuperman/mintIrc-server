@@ -1,57 +1,23 @@
+// Libs go in here.
 var lib = {};
+
 // Setup: lib loading, etc.
-var setup = (function() {
+(function setup() {
 	lib = {
-		app : require('http').createServer(handle),
-		fs  : require('fs'),
-		net : require('net'),
-		url : require('url'),
-		mime: require('mime'),
-		path: require('path'),
+		io  : require('socket.io').listen(33111),
 		irc : require('irc'),
 		user: require('./user')('users'),
+		proc: require('process'),
 	};
-	lib.app.listen(80);
-	
-	lib.io = require('socket.io').listen(33111);
 	lib.io.set('log level', 1);
-});
-
-// Simple file handling.
-var handle = (function() {
-	var serve = function(res, filename) {	
-		lib.fs.readFile(filename,
-			function sendFile(err, data) {
-				if (err) {
-					console.log(err);
-					res.writeHead(500);
-					return res.end("500 - Internal Application Error");
-				}
-				var type = lib.mime.lookup(filename);
-				res.writeHead(200, {'Content-Type' : type});
-				res.end(data);
-			}
-		);
-	};
-	return function handler(req, res) {
-		var uri = lib.url.parse(req.url).pathname;
-		var filename = lib.path.join("ui", uri);
-
-		lib.path.exists(filename, function(exists) {
-			if (exists) {
-				if (lib.fs.statSync(filename).isDirectory()) {
-					filename += "index.html";
-				}
-				serve(res, filename);
-			} else {
-				res.writeHead(404);
-				return res.end("404 - File not found");
-			}
-		});
-	}
 }());
-// Start serving http.
-setup();
+
+lib.proc.on('SIGUSR1', function runFromCache() {
+	lib.user.cache();
+});
+lib.proc.on('SIGUSR2', function useDisk() {
+	lib.user.write();
+});
 
 // All online users are stored here for session-sharing.
 var onlineUsers = {};
