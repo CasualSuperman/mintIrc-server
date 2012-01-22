@@ -134,7 +134,7 @@ exports = module.exports = function(_dir) {
 	ret.getUser = getUser;
 	ret.getUserSync = getUserSync;
 	ret.makeUser = makeUser;
-	ret.sync = syncDisk;
+//	ret.useCache = syncDisk;
 	ret.verify = verify;
 	return ret;
 }

@@ -13,10 +13,10 @@ var lib = {};
 }());
 
 lib.proc.on('SIGUSR1', function runFromCache() {
-	lib.user.cache();
+//	lib.user.useCache(true);
 });
 lib.proc.on('SIGUSR2', function useDisk() {
-	lib.user.write();
+//	lib.user.useCache(false);
 });
 
 // All online users are stored here for session-sharing.
