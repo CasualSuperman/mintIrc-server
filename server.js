@@ -7,17 +7,9 @@ var lib = {};
 		io  : require('socket.io').listen(33111),
 		irc : require('irc'),
 		user: require('./user')('users'),
-		proc: require('process'),
 	};
 	lib.io.set('log level', 1);
 }());
-
-lib.proc.on('SIGUSR1', function runFromCache() {
-//	lib.user.useCache(true);
-});
-lib.proc.on('SIGUSR2', function useDisk() {
-//	lib.user.useCache(false);
-});
 
 // All online users are stored here for session-sharing.
 var onlineUsers = {};

@@ -34,24 +34,25 @@ var allCache = function(data) {
 
 // Caches a client-supplied number of results
 var someCache = function(data) {
-		var hash = hashCache[data];
-		if (hash) {
-			return hash;
-		}
-		hashCache[data] = hash = noCache(data);
-		hashCache.last.push(data);
-		shrinkToSize();
+	var hash = hashCache[data];
+	if (hash) {
 		return hash;
-	};
+	}
+	hashCache[data] = hash = noCache(data);
+	hashCache.last.push(data);
+	shrinkToSize();
+	return hash;
 };
 
 module.exports = function sha1(data) {
 	switch(config.cache) {
 		case 0:
-			return noCache(data);
+			return noCache;
 		case -1:
-			return allCache(data);
+		case undefined:
+			return allCache;
 		default:
-			return someCache(data); //(cacheSize);
+			config.cache = data;
+			return someCache; //(cacheSize);
 	}
 };
