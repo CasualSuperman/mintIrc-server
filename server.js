@@ -1,123 +1,267 @@
-// Libs go in here.
-var lib = {};
-
 // Setup: lib loading, etc.
-(function setup() {
-	lib = {
-		io  : require('socket.io').listen(33111),
-		irc : require('irc'),
-		user: require('./user')('users'),
-	};
-	lib.io.set('log level', 1);
-}());
+var lib = {
+	io  : require('socket.io').listen(33111),
+	irc : require('irc'),
+	user: require('./user')('users'),
+};
 
 // All online users are stored here for session-sharing.
 var onlineUsers = {};
 
-lib.io.sockets.on('connection', function(socket) {
+lib.io.of("/mintI").on('connection', function(socket) {
 	var events = {
-		mintI: {
-			login: function(auth) {
-				lib.user.verify(auth, function login(user) {
-					if (user.status !== "okay") {
-						socket.emit('login_failed', user);
-						return;
-					}
-					if (lib.user.isUser(user.email)) {
-						var localUser = lib.user.getUserSync(user.email);
-						var online = onlineUsers[user.email];
-						if (online) {
-							socket.set('user', online);
-						} else {
-							online = onlineUsers[user.email] = new OnlineUser(auth, localUser);
-						}
-						online.addWebConn(socket);
-						socket.emit('login_passed', localUser);
-					} else {
-						socket.emit('register', user);
-					}
-				});
-			},
-			logout: function() {
-				var user = socket.get('user');
-				if (user) {
-					user.disconnect(socket);		
+		login: function(auth) {
+			lib.user.verify(auth, function login(user) {
+				if (user.status !== "okay") {
+					socket.emit('login_failed', user);
+					return;
 				}
-			},
-			guest: function() {
-				socket.set('user', new OnlineUser());
-			},
-			register: function(info) {
-			},
+				if (lib.user.isUser(user.email)) {
+					var localUser = lib.user.getUserSync(user.email);
+					var online = onlineUsers[user.email];
+					if (online) {
+						socket.set('user', online);
+					} else {
+						online = onlineUsers[user.email] = new OnlineUser(auth, localUser);
+					}
+					online.addWebConn(socket);
+					socket.emit('login_passed', localUser);
+				} else {
+					socket.emit('register', user);
+				}
+			});
 		},
-		irc: {
-			say: function(info) {
-				var user = socket.get('user');
-				if (user) {
+		logout: function() {
+			var user = socket.get('user');
+			if (user) {
+				user.disconnect(socket);		
+			}
+		},
+		guest: function() {
+			socket.set('user', new OnlineUser());
+			console.log("Guest logged in.");
+		},
+		register: function(info) {
+			console.log("Registering: " + info);
+		},
+	};
+	for (var event in events) {
+		console.info("Adding event handler /mintI/" + event);
+		socket.on(event, events[event]);
+	}
+	socket.on('disconnect', function() {
+		console.log("LEAVING.");
+		var user = socket.get('user', function(err, name) {
+			if (!err && user) {
+				onlineUsers[user].disconnect(socket);
+			}
+		});
+	});
+});
+
+lib.io.of("/irc").on('connection', function(socket) {
+	var events = {
+		say: function(info) {
+			socket.get('nick', function(err, nick) {
+				if (!err) {
+					var user = onlineUsers[nick];
 					var conn = user.getServer(info.addr);
 					if (conn) {
 						conn.say(info.target, info.msg);
 						user.broadcast(info);
 					}
 				}
-			},
-			connect: function(serv) {
-				
-			},
+			});
+		},
+		join: function(info) {
+			socket.get('nick', function(err, nick) {
+				if (!err) {
+					var conn = onlineUsers[nick].getServer(info.addr);
+					if (conn) {
+						conn.join(info.chan);
+					}
+				}
+			});
+		},
+		raw: function(info) {
+			socket.get('nick', function(err, nick) {
+				if (!err) {
+					var conn = onlineUsers[nick].getServer(info.addr);
+					conn.send(info.msg);
+				}
+			});
+		},
+		connect: function(serv) {
+			socket.get('nick', function(err, nick) {
+				if (!err) {
+					onlineUsers[nick].joinServer(serv);
+				}
+			});
+		},
+		nick: function(nick) {
+			console.log("Setting nick to " + nick);
+			socket.get('nick', function(err, oldNick) {
+				if (!err) {
+					socket.set('nick', nick, function() {
+						onlineUsers[nick] = onlineUsers[oldNick];
+						onlineUsers[oldNick] = null;
+						console.log("Nick set to " + nick);
+					});
+				}
+			});
+		},
+		disconnect: function() {
+			socket.get('nick', function(err, nick) {
+				if (!err) {
+					onlineUsers[nick].disconnect(socket);
+				}
+			});
 		},
 	};
-	(['mintI', 'irc']).forEach(function(namespace) {
-		for (var event in events[namespace]) {
-			socket.on(namespace + '-' + event, events[namespace][event]);
-		}
-	});
-	socket.on('disconnect', function() {
-
-		var user = socket.get('user');
-		if (user) {
-			user.disconnect(socket);
-		}
+	for (var event in events) {
+		console.info("Adding event handler /irc/" + event);
+		socket.on(event, events[event]);
+	}
+	var nick = genRandomNick();
+	socket.set('nick', nick, function() {
+		onlineUsers[nick] = new OnlineUser(null, {
+				nick: nick,
+		});
+		console.log("Picked random nick " + nick);
+		onlineUsers[nick].conns.web.push(socket);
+		onlineUsers[nick].nick = nick;
 	});
 });
 
+var genRandomNick = (function() {
+	var prefixes  = ['Minty', 'Casual'];
+	var names     = ['Spring', 'Superman'];
+	var postfixes = ['Fresh', 'Noodles'];
+
+	function random(arr) {
+		var index = Math.floor(Math.random() * arr.length);
+		return arr[index];
+	}
+
+	return function() {
+		var name = random(names);
+		if (Math.random() > 0.25) {
+			name = random(prefixes) + name;
+		}
+		if (Math.random() > 0.75) {
+			name += random(postfixes);
+		}
+		return name;
+	};
+})();
+
 var OnlineUser = function(auth, local) {
 	this.info = local;
+	this.nick = "";
 	this.conns = {
 		irc: {}, // irc[addr] = conn
 		web: [], // loop
 	};
-};
-
-OnlineUser.prototype = {
-	getServer: function(addr) {
+	this.getServer = function(addr) {
 		var irc = this.conns.irc[addr];
 		return irc;
-	},
-	broadcast: function(type, msg) {
+	};
+	this.broadcast = function(type, msg) {
 		this.conns.web.forEach(function(conn) {
 			conn.emit(type, msg);
 		});
-	},
-	joinServer: function(addr) {
+	};
+	this.joinServer = function(addr) {
 		if (!this.conns.irc[addr]) {
 			var conn = new lib.irc.Client(addr, this.nick, {userName: 'mintIrc'});
 			this.conns.irc[addr] = conn;
-			conn.addListener('raw', function(message) {
-				this.broadcast('message',{addr: addr, msg: message.rawCommand});
+			var user = this;
+			var events = {
+				join: function (channel, nick, message) {
+					user.broadcast('join', {
+						chan: channel,
+						nick: nick,
+						addr: addr,
+					});
+				},
+				part: function (channel, nick, reason, message) {
+					user.broadcast('part', {
+						chan: channel,
+						nick: nick,
+						reason: reason,
+						addr: addr,
+					});
+				},
+				quit: function (nick, reason, chans, message) {
+					user.broadcast('quit', {
+						nick: nick,
+						msg: reason,
+						chans: chans,
+						addr: addr,
+					});
+				},
+				names: function (channel, nicks) {
+					user.broadcast('names', {
+						chan: channel,
+						names: nicks,
+						addr: addr,
+					});
+				},
+				registered: function (message) {
+					user.broadcast('registered', {
+						msg: message,
+						addr: addr,
+						nick: user.nick,
+					});
+				},
+				topic: function (channel, topic, nick, message) {
+					user.broadcast('topic', {
+						chan: channel,
+						topic: topic,
+						nick: nick,
+						addr: addr,
+					});
+				},
+				pm: function (nick, text, message) {
+					user.broadcast('pm', {
+						nick: nick,
+						msg: text,
+						addr: addr,
+					});
+				},
+				nick: function (oldNick, newNick, chans, message) {
+					user.broadcast('nick', {
+						nick: oldNick,
+						msg: newNick,
+						chans: chans,
+						addr: addr,
+					});
+				},
+			};
+			for (event in events) {
+				conn.addListener(event, events[event]);
+			}
+			conn.addListener('message#', function (nick, to, text, message) {
+					user.broadcast('message', {
+						chan: to,
+						nick: nick,
+						msg: text,
+						addr: addr,
+					});
 			});
 		}
-	},
-	disconnect: function(sock) {
+	};
+	this.disconnect = function(sock) {
 		var index = this.conns.web.indexOf(sock);
 		if (index >= 0) {
 			this.conns.web.splice(index, 1);
 		}
 		if (this.conns.web.length === 0) {
 			if (!this.persist) {
-				this.conns.irc.forEach(function(client) {
-					client.disconnect("mintIrc (http://mintIrc.com/)");
-				});
+				for (addr in this.conns.irc) {
+					this.conns.irc[addr].disconnect("mintIrc (http://mintIrc.com/)");
+				}
 			}
 		}
-	},
+	};
 };
