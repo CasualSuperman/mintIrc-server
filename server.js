@@ -98,10 +98,10 @@ lib.io.of("/irc").on('connection', function(socket) {
 				}
 			});
 		},
-		connect: function(serv) {
+		connect: function(info) {
 			socket.get('nick', function(err, nick) {
 				if (!err) {
-					onlineUsers[nick].joinServer(serv);
+					onlineUsers[nick].joinServer(info);
 				}
 			});
 		},
@@ -185,11 +185,13 @@ var OnlineUser = function(auth, local) {
 			conn.emit(type, msg);
 		});
 	};
-	this.joinServer = function(addr) {
+	this.joinServer = function(info) {
+		var addr = info.addr;
 		if (!this.conns.irc[addr]) {
 			var conn = new lib.irc.Client(addr, this.nick, {
 				userName: 'mintIrc',
 				realName: 'mintIrc web client',
+				channels: info.chans || [],
 			});
 			this.conns.irc[addr] = conn;
 			var user = this;
