@@ -76,6 +76,19 @@ lib.io.of("/irc").on('connection', function(socket) {
 				}
 			});
 		},
+		action: function(info) {
+			socket.get('nick', function(err, nick) {
+				if (!err) {
+					var user = onlineUsers[nick];
+					var conn = user.getServer(info.addr);
+					if (conn) {
+						conn.action(info.chan, info.msg);
+						info.nick = nick;
+						user.broadcast('message', info);
+					}
+				}
+			});
+		},
 		join: function(info) {
 			socket.get('nick', function(err, nick) {
 				if (!err) {
