@@ -84,6 +84,7 @@ lib.io.of("/irc").on('connection', function(socket) {
 					if (conn) {
 						conn.action(info.chan, info.msg);
 						info.nick = nick;
+						info.action = true;
 						user.broadcast('message', info);
 					}
 				}
