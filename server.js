@@ -1,8 +1,14 @@
 // Setup: lib loading, etc.
 var lib = {
+	fs  : require('fs'),
 	io  : require('socket.io').listen(33111),
 	irc : require('irc'),
 	user: require('./user')('users'),
+};
+
+var security = {
+	key : lib.fs.readFileSync('mintirc.com.pem'),
+	cert: lib.fs.readFileSync('mintirc.com.crt'),
 };
 
 // All online users are stored here for session-sharing.
@@ -232,6 +238,7 @@ var OnlineUser = function(auth, local) {
 				userName: 'mintIrc',
 				realName: 'mintIrc web client',
 				channels: info.chans || [],
+//				secure  : security,
 			});
 			this.conns.irc[addr] = conn;
 			var user = this;
