@@ -69,9 +69,35 @@ lib.io.of("/irc").on('connection', function(socket) {
 					var user = onlineUsers[nick];
 					var conn = user.getServer(info.addr);
 					if (conn) {
-						conn.say(info.chan, info.msg);
+						var head = "PRIVMSG " + info.chan + " : ";
+						var sent = false;
+						var msg = info.msg;
 						info.nick = nick;
-						user.broadcast('message', info);
+						while (msg.length > 0) {
+							var toSend = "";
+							if (sent) {
+								msg = "... " + msg;
+							}
+							toSend += msg;
+							if ((toSend.length + head.length) > 410) {
+								var end = 410 - (head.length + 4);
+								toSend = msg.slice(0, end);
+								var space = toSend.lastIndexOf(' ');
+								msg = msg.slice(end);
+								if (space > toSend.length - 10) {
+									msg = toSend.slice(space) + msg;
+									toSend = toSend.slice(0, space);
+								}
+								toSend += " ...";
+								sent = true;
+							} else {
+								toSend = msg;
+								msg = "";
+							}
+							conn.say(info.chan, toSend);
+							info.msg = toSend;
+							user.broadcast('message', info);
+						}
 					}
 				}
 			});
