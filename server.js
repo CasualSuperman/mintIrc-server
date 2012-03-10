@@ -90,6 +90,9 @@ lib.io.of("/irc").on('connection', function(socket) {
 		quit: function(info) {
 			onlineUsers[id].disconnect(socket);
 		},
+		nick: function(info) {
+			onlineUsers[id].getServer(info.addr).send("nick", info.nick);
+		},
 	};
 	for (var event in events) {
 		socket.on(event, events[event]);
@@ -120,6 +123,7 @@ var OnlineUser = function(auth, local) {
 				realName: 'mintIrc web client',
 				channels: info.chans || [],
 //				secure  : security,
+//				selfSigned: true,
 			});
 			this.conns.irc[addr] = conn;
 			var user = this;
@@ -172,8 +176,8 @@ var OnlineUser = function(auth, local) {
 				},
 				nick: function (oldNick, newNick, chans, message) {
 					user.broadcast('nick', {
-						nick: oldNick,
-						msg: newNick,
+						oldNick: oldNick,
+						nick: newNick,
 						chans: chans,
 						addr: addr,
 					});
