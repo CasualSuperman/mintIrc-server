@@ -6,16 +6,27 @@ var lib = {
 	user: require('./user')('users'),
 };
 
+// Our security keys.
 var security = {
 	key : lib.fs.readFileSync('mintirc.com.pem'),
 	cert: lib.fs.readFileSync('mintirc.com.crt'),
 };
 
-// All online users are stored here for session-sharing.
+/*
+ * All online users are stored here.  In the future, this will let us to find
+ * users with already logged in sessions, allowing us to join their sessions
+ * dynamically.
+ */
 var onlineUsers = [];
 
+// Each new web connection goes through here.
 lib.io.of("/irc").on('connection', function(socket) {
-	// Find the next open ID.
+
+	/*
+	 * Start at the last index of onlineUsers, which is valid to assign to.  If
+	 * there's an open slot, jump up to that instead. This avoids indefinitely
+	 * extending the array.
+	 */
 	var id = onlineUsers.length;
 	for (var i = 0; i < id; i++) {
 		if (onlineUsers[i] === undefined) {
@@ -23,14 +34,27 @@ lib.io.of("/irc").on('connection', function(socket) {
 		}
 	}
 
+	// Put a new user into the open slot and add our web connection to it.
 	onlineUsers[id] = new OnlineUser(null, {});
 	onlineUsers[id].conns.web.push(socket);
 
+	/*
+	 * Store our id locally. We don't use it, but I have a feeling it will be
+	 * useful in the future when implementing session joining.
+	 */
+	socket.set('id', id);
+
+	// A list of events to handle.
 	var events = {
+
+		// When the user says something.
 		say: function(info) {
 			var user = onlineUsers[id];
 			var conn = user.getServer(info.addr);
+
+			// Make sure the connection we're writing to is found.
 			if (conn) {
+				// Split messages that are too long.
 				var head = "PRIVMSG " + info.chan + " : ";
 				var sent = false;
 				var msg = info.msg;
@@ -61,6 +85,8 @@ lib.io.of("/irc").on('connection', function(socket) {
 				}
 			}
 		},
+
+		// When the user performs an action (/me).
 		action: function(info) {
 			var user = onlineUsers[id];
 			var conn = user.getServer(info.addr);
@@ -71,6 +97,8 @@ lib.io.of("/irc").on('connection', function(socket) {
 				user.broadcast('message', info);
 			}
 		},
+
+		// When the user joins a channel.
 		join: function(info) {
 			var conn = onlineUsers[id].getServer(info.addr);
 			if (conn) {
@@ -81,40 +109,62 @@ lib.io.of("/irc").on('connection', function(socket) {
 				}
 			}
 		},
+
+		// When the user connects to a server.
 		connect: function(info) {
 			onlineUsers[id].joinServer(info);
 		},
-		disconnect: function() {
-			onlineUsers[id].disconnect(socket);
-		},
+
+		// When the user explicitly quits.
 		quit: function(info) {
 			onlineUsers[id].disconnect(socket);
 		},
+
+		// When the user requests a nick change.
 		nick: function(info) {
 			onlineUsers[id].getServer(info.addr).send("nick", info.nick);
 		},
+
+		// When the socket is disconnected.
+		disconnect: function() {
+			onlineUsers[id].disconnect(socket);
+		},
 	};
+
+	// Loop through all our events, attach them to our socket.
 	for (var event in events) {
 		socket.on(event, events[event]);
 	}
 });
 
+/*
+ * Represents an online user.
+ *
+ * Auth is a token received from browserid. (TODO: Not currently implemented.)
+ * local is the persistent representation of our user from our store.
+ * 		(Also not implemented.)
+ */
 var OnlineUser = function(auth, local) {
 	this.info = local;
-	this.nick = "";
 	this.conns = {
 		irc: {}, // irc[addr] = conn
 		web: [], // loop
 	};
+
+	// Gets a server based on its address.
 	this.getServer = function(addr) {
 		var irc = this.conns.irc[addr];
 		return irc;
 	};
+
+	// Send a message to each web connection under the heading "type".
 	this.broadcast = function(type, msg) {
 		this.conns.web.forEach(function(conn) {
 			conn.emit(type, msg);
 		});
 	};
+
+	// Joins the given server if it is not already connected.
 	this.joinServer = function(info) {
 		var addr = info.addr;
 		if (!this.conns.irc[addr]) {
@@ -127,6 +177,8 @@ var OnlineUser = function(auth, local) {
 			});
 			this.conns.irc[addr] = conn;
 			var user = this;
+
+			// A list of events to handle from the irc connection.
 			var events = {
 				join: function (channel, nick, message) {
 					user.broadcast('join', {
@@ -182,6 +234,11 @@ var OnlineUser = function(auth, local) {
 						addr: addr,
 					});
 				},
+				/*
+				 * This is necessary because the version of the library
+				 * available from npm doesn't properly implement the 'message#'
+				 * event, so we do our own type checking.
+				 */
 				message: function (nick, to, text) {
 					switch (to[0]) {
 					case '#':
@@ -199,25 +256,38 @@ var OnlineUser = function(auth, local) {
 							msg: text,
 							addr: addr,
 						});
+						break;
 					}
 				},
 			};
+
+			// Attach all the events.
 			for (event in events) {
 				conn.addListener(event, events[event]);
 			}
 		}
 	};
+
+	/*
+	 * Disconnects a web socket. If there are no more listening sockets, and we
+	 * aren't set to persist after all web connections are gone, disconnect all
+	 * our irc connections and free our spot in the onlineUsers list.
+	 */
 	this.disconnect = function(sock) {
-		var index = this.conns.web.indexOf(sock);
-		if (index >= 0) {
-			this.conns.web.splice(index, 1);
-		}
-		if (this.conns.web.length === 0) {
-			if (!this.persist) {
-				for (addr in this.conns.irc) {
-					this.conns.irc[addr].disconnect("mintIrc (http://mintIrc.com/)");
-				}
-			}
+		// Filter out the socket.
+		this.conns.web = this.conns.web.filter(function(conn) {
+			return conn !== sock;
+		});
+
+		// If it's empty, shut it all down.
+		if (!this.persist && this.conns.web.length === 0) {
+
+			// Disconnect all our connections.
+			this.conns.irc.forEach(function(conn) {
+				conn.disconnect("mintIrc (http://mintIrc.com/)");
+			});
+
+			// Take us out of the online users.
 			var id = onlineUsers.indexOf(this);
 			delete onlineUsers[id];
 		}
