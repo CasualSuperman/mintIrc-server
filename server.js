@@ -283,9 +283,11 @@ var OnlineUser = function(auth, local) {
 		if (!this.persist && this.conns.web.length === 0) {
 
 			// Disconnect all our connections.
-			this.conns.irc.forEach(function(conn) {
-				conn.disconnect("mintIrc (http://mintIrc.com/)");
-			});
+			for (conn in this.conns.irc) {
+				if (this.conns.irc.hasOwnProperty(conn) {
+					this.conns.irc[conn].disconnect("mintIrc (http://mintIrc.com/)");
+				}
+			}
 
 			// Take us out of the online users.
 			var id = onlineUsers.indexOf(this);
