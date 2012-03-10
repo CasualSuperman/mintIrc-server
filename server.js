@@ -12,208 +12,89 @@ var security = {
 };
 
 // All online users are stored here for session-sharing.
-var onlineUsers = {};
-
-lib.io.of("/mintI").on('connection', function(socket) {
-	var events = {
-		login: function(auth) {
-			lib.user.verify(auth, function login(user) {
-				if (user.status !== "okay") {
-					socket.emit('login_failed', user);
-					return;
-				}
-				if (lib.user.isUser(user.email)) {
-					var localUser = lib.user.getUserSync(user.email);
-					var online = onlineUsers[user.email];
-					if (online) {
-						socket.set('user', online);
-					} else {
-						online = onlineUsers[user.email] = new OnlineUser(auth, localUser);
-					}
-					online.addWebConn(socket);
-					socket.emit('login_passed', localUser);
-				} else {
-					socket.emit('register', user);
-				}
-			});
-		},
-		logout: function() {
-			var user = socket.get('user');
-			if (user) {
-				user.disconnect(socket);		
-			}
-		},
-		guest: function() {
-			socket.set('user', new OnlineUser());
-			console.log("Guest logged in.");
-		},
-		register: function(info) {
-			console.log("Registering: " + info);
-		},
-	};
-	for (var event in events) {
-		console.info("Adding event handler /mintI/" + event);
-		socket.on(event, events[event]);
-	}
-	socket.on('disconnect', function() {
-		console.log("LEAVING.");
-		var user = socket.get('user', function(err, name) {
-			if (!err && user) {
-				onlineUsers[user].disconnect(socket);
-			} else {
-				console.log(err);
-			}
-		});
-	});
-});
+var onlineUsers = [];
 
 lib.io.of("/irc").on('connection', function(socket) {
+	// Find the next open ID.
+	var id = onlineUsers.length;
+	for (var i = 0; i < id; i++) {
+		if (onlineUsers[i] === undefined) {
+			id = i;
+		}
+	}
+
+	onlineUsers[id] = new OnlineUser(null, {});
+	onlineUsers[id].conns.web.push(socket);
+
 	var events = {
 		say: function(info) {
-			socket.get('nick', function(err, nick) {
-				if (!err) {
-					var user = onlineUsers[nick];
-					var conn = user.getServer(info.addr);
-					if (conn) {
-						var head = "PRIVMSG " + info.chan + " : ";
-						var sent = false;
-						var msg = info.msg;
-						info.nick = nick;
-						while (msg.length > 0) {
-							var toSend = "";
-							if (sent) {
-								msg = "... " + msg;
-							}
-							toSend += msg;
-							if ((toSend.length + head.length) > 410) {
-								var end = 410 - (head.length + 4);
-								toSend = msg.slice(0, end);
-								var space = toSend.lastIndexOf(' ');
-								msg = msg.slice(end);
-								if (space > toSend.length - 10) {
-									msg = toSend.slice(space) + msg;
-									toSend = toSend.slice(0, space);
-								}
-								toSend += " ...";
-								sent = true;
-							} else {
-								toSend = msg;
-								msg = "";
-							}
-							conn.say(info.chan, toSend);
-							info.msg = toSend;
-							user.broadcast('message', info);
-						}
+			var user = onlineUsers[id];
+			var conn = user.getServer(info.addr);
+			if (conn) {
+				var head = "PRIVMSG " + info.chan + " : ";
+				var sent = false;
+				var msg = info.msg;
+				while (msg.length > 0) {
+					var toSend = "";
+					if (sent) {
+						msg = "... " + msg;
 					}
+					toSend += msg;
+					if ((toSend.length + head.length) > 410) {
+						var end = 410 - (head.length + 4);
+						toSend = msg.slice(0, end);
+						var space = toSend.lastIndexOf(' ');
+						msg = msg.slice(end);
+						if (space > toSend.length - 10) {
+							msg = toSend.slice(space) + msg;
+							toSend = toSend.slice(0, space);
+						}
+						toSend += " ...";
+						sent = true;
+					} else {
+						toSend = msg;
+						msg = "";
+					}
+					conn.say(info.chan, toSend);
+					info.msg = toSend;
+					user.broadcast('message', info);
 				}
-			});
+			}
 		},
 		action: function(info) {
-			socket.get('nick', function(err, nick) {
-				if (!err) {
-					var user = onlineUsers[nick];
-					var conn = user.getServer(info.addr);
-					if (conn) {
-						conn.action(info.chan, info.msg);
-						info.nick = nick;
-						info.action = true;
-						user.broadcast('message', info);
-					}
-				}
-			});
+			var user = onlineUsers[id];
+			var conn = user.getServer(info.addr);
+			if (conn) {
+				conn.action(info.chan, info.msg);
+				info.nick = nick;
+				info.action = true;
+				user.broadcast('message', info);
+			}
 		},
 		join: function(info) {
-			socket.get('nick', function(err, nick) {
-				if (!err) {
-					var conn = onlineUsers[nick].getServer(info.addr);
-					if (conn) {
-						try {
-							conn.join(info.chan);
-						} catch (err) {
-							console.log(err);
-						}
-					}
+			var conn = onlineUsers[id].getServer(info.addr);
+			if (conn) {
+				try {
+					conn.join(info.chan);
+				} catch (err) {
+					console.log(err);
 				}
-			});
-		},
-		raw: function(info) {
-			socket.get('nick', function(err, nick) {
-				if (!err) {
-					var conn = onlineUsers[nick].getServer(info.addr);
-					conn.send(info.msg);
-				}
-			});
+			}
 		},
 		connect: function(info) {
-			socket.get('nick', function(err, nick) {
-				if (!err) {
-					onlineUsers[nick].joinServer(info);
-				}
-			});
-		},
-		nick: function(nick) {
-			console.log("Setting nick to " + nick);
-			socket.get('nick', function(err, oldNick) {
-				if (!err) {
-					socket.set('nick', nick, function() {
-						onlineUsers[nick] = onlineUsers[oldNick];
-						onlineUsers[oldNick] = null;
-						console.log("Nick set to " + nick);
-					});
-				}
-			});
+			onlineUsers[id].joinServer(info);
 		},
 		disconnect: function() {
-			socket.get('nick', function(err, nick) {
-				if (!err) {
-					onlineUsers[nick].disconnect(socket);
-				}
-			});
+			onlineUsers[id].disconnect(socket);
 		},
-		quit: function() {
-			socket.get('nick', function(err, nick) {
-				if (!err) {
-					onlineUsers[nick].disconnect(socket);
-				}
-			});
+		quit: function(info) {
+			onlineUsers[id].disconnect(socket);
 		},
 	};
 	for (var event in events) {
-		console.info("Adding event handler /irc/" + event);
 		socket.on(event, events[event]);
 	}
-	var nick = genRandomNick();
-	socket.set('nick', nick, function() {
-		onlineUsers[nick] = new OnlineUser(null, {
-				nick: nick,
-		});
-		console.log("Picked random nick " + nick);
-		onlineUsers[nick].conns.web.push(socket);
-		onlineUsers[nick].nick = nick;
-	});
 });
-
-var genRandomNick = (function() {
-	var prefixes  = ['Minty', 'Casual'];
-	var names     = ['Spring', 'Superman'];
-	var postfixes = ['Fresh', 'Noodles'];
-
-	function random(arr) {
-		var index = Math.floor(Math.random() * arr.length);
-		return arr[index];
-	}
-
-	return function() {
-		var name = random(names);
-		while (Math.random() < 0.15) {
-			name = random(prefixes) + name;
-		}
-		while (Math.random() < 0.05) {
-			name += random(postfixes);
-		}
-		return name;
-	};
-})();
 
 var OnlineUser = function(auth, local) {
 	this.info = local;
@@ -234,7 +115,7 @@ var OnlineUser = function(auth, local) {
 	this.joinServer = function(info) {
 		var addr = info.addr;
 		if (!this.conns.irc[addr]) {
-			var conn = new lib.irc.Client(addr, this.nick, {
+			var conn = new lib.irc.Client(addr, info.nick, {
 				userName: 'mintIrc',
 				realName: 'mintIrc web client',
 				channels: info.chans || [],
@@ -261,7 +142,7 @@ var OnlineUser = function(auth, local) {
 				quit: function (nick, reason, chans, message) {
 					user.broadcast('quit', {
 						nick: nick,
-						msg: reason,
+						reason: reason,
 						chans: chans,
 						addr: addr,
 					});
@@ -277,8 +158,9 @@ var OnlineUser = function(auth, local) {
 					user.broadcast('registered', {
 						msg: message,
 						addr: addr,
-						nick: user.nick,
+						nick: info.nick,
 					});
+					console.log("Nick: ", info.nick);
 				},
 				topic: function (channel, topic, nick, message) {
 					user.broadcast('topic', {
@@ -332,6 +214,8 @@ var OnlineUser = function(auth, local) {
 					this.conns.irc[addr].disconnect("mintIrc (http://mintIrc.com/)");
 				}
 			}
+			var id = onlineUsers.indexOf(this);
+			delete onlineUsers[id];
 		}
 	};
 };
