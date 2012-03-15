@@ -284,7 +284,7 @@ var OnlineUser = function(auth, local) {
 
 			// Disconnect all our connections.
 			for (conn in this.conns.irc) {
-				if (this.conns.irc.hasOwnProperty(conn) {
+				if (this.conns.irc.hasOwnProperty(conn)) {
 					this.conns.irc[conn].disconnect("mintIrc (http://mintIrc.com/)");
 				}
 			}
